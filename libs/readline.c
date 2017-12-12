@@ -10,8 +10,8 @@ int readLine(int fd, void *buffer, size_t n) {
     int  readNum;
     int  totalRead = 0;
     buf = (char *)buffer;
-    readNum = read(fd,&ch,1);
     for(;;) {
+        readNum = read(fd,&ch,1);
         if (readNum == -1)
             if (errno == EINTR)
                 continue;
@@ -23,7 +23,7 @@ int readLine(int fd, void *buffer, size_t n) {
             else
                 break;
         else
-            if (totalRead < n -1) {
+            if (totalRead < n - 1) {
                 totalRead++;
                 *buf++ = ch;
             }

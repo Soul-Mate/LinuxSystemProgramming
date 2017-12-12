@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8)
-project(LinuxProgramming)
+project(LinuxSystemProgramming)
 set(CMAKE_BUILD_TYPE release)
 # 设置执行文件输出路径
 SET(LIBRARY_OUTPUT_PATH  ${PROJECT_SOURCE_DIR}/libs)
