@@ -7,10 +7,12 @@
 #include <string.h>
 #include <unistd.h>
 #include <signal.h>
+#include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
-char    *str_upper(const char *str);
+char    *str_upper(char *str);
+int     read_line(int, void *, size_t);
 void	err_msg(const char *, ...);			/* {App misc_source} */
 void	err_dump(const char *, ...) __attribute__((noreturn));
 void	err_quit(const char *, ...) __attribute__((noreturn));

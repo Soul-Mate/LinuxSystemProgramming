@@ -1,8 +1,9 @@
 //
 // Created by xyc on 2017/12/12.
 //
-#include "readline.h"
-int readLine(int fd, void *buffer, size_t n) {
+#include "main.h"
+
+int read_line(int fd, void *buffer, size_t n) {
     if (buffer == NULL || n <= 0)
         return -1;
     char ch;
@@ -10,6 +11,7 @@ int readLine(int fd, void *buffer, size_t n) {
     int  readNum;
     int  totalRead = 0;
     buf = (char *)buffer;
+
     for(;;) {
         readNum = read(fd,&ch,1);
         if (readNum == -1)
