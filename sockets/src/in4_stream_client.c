@@ -31,6 +31,5 @@ int main(int argc, const char *argv[])
     if (total_read == -1)
         err_msg("read_line error");
     printf("%s\n",buf);
-    while (1);
     return 0;
 }
