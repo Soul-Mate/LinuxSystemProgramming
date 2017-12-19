@@ -1,0 +1,19 @@
+include_directories(../includes)
+# 设置输出文件路径
+set(EXECUTABLE_OUTPUT_PATH bin)
+# 添加library
+set(CMAKE_EXE_LINKER_FLAGS "-pthread")
+# 设置共享库输出路径
+SET(LIBRARY_OUTPUT_PATH  ../libs)
+AUX_SOURCE_DIRECTORY(../libs LIBS)
+add_library(pthread_libs ${LIBS})
+ADD_EXECUTABLE(pthread_create src/pthread_create.c)
+ADD_EXECUTABLE(pthread_create2 src/pthread_create2.c)
+ADD_EXECUTABLE(pthread_join src/pthread_join.c)
+ADD_EXECUTABLE(pthread_exit src/pthread_exit.c)
+ADD_EXECUTABLE(pthread_detach src/pthread_detach.c)
+TARGET_LINK_LIBRARIES(pthread_create pthread_libs)
+TARGET_LINK_LIBRARIES(pthread_create2 pthread_libs)
+TARGET_LINK_LIBRARIES(pthread_join pthread_libs)
+TARGET_LINK_LIBRARIES(pthread_exit pthread_libs)
+TARGET_LINK_LIBRARIES(pthread_detach pthread_libs)
