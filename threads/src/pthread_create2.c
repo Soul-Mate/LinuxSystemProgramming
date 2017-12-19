@@ -11,7 +11,7 @@ void *start_routine(void *);
 void
 *start_routine(void *arg) {
     printf("0x%lu: 第 %s 个线程\n",pthread_self(),(char *)arg);
-    return (void *)NULL;
+    return NULL;
 }
 
 int
