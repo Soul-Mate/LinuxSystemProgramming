@@ -46,11 +46,14 @@ typedef struct thread_pool {
     volatile int thread_working_nums;   /* 工作线程 */
 }thread_pool;
 
-thread_pool * thread_pool_init(int);
+static thread_pool * thread_pool_init(int);
+static int thread_pool_add_thread(thread_pool *, thread *, pthread_att_t const *);
+static int thread_pool_add_task(thread_job *);
+void *thread_start(void *);
 
 static int thread_job_queue_init(thread_job_queue **);
 int thread_job_push(thread_job_queue *, thread_job *);
 thread_job * thread_job_pull(thread_job_queue *);
 static void thread_job_queue_clear(thread_job_queue *);
-static void thread_job_destroy(thread_job_queue *);
+static void thread_job_queue_destroy(thread_job_queue *);
 #endif //LINUX_SYSTEM_PROGRAMMING_THPOOL_H

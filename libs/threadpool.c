@@ -4,11 +4,14 @@
  */
 #define THREAD_POOL_DEBUG
 #include "threadpool.h"
+
 volatile int threads_keep_alive = 0;
 
-thread_pool *
+static thread_pool *
 thread_pool_init(int nums)
 {
+    int i;
+    pthread_attr_t attr;
     threads_keep_alive = 1;
 
     /* 创建线程池 */
@@ -38,10 +41,67 @@ thread_pool_init(int nums)
 #ifdef THREAD_POOL_DEBUG
         printf("thread job queue make error\n");
 #endif
+        thread_job_queue_destroy(_pool->job_queue);
         free(_pool);
+        return NULL;
     }
+    /* 初始化线程属性 */
+    if (pthread_attr_init(&attr) != 0) {
+#ifdef THREAD_POOL_DEBUG
+        printf("thread init attr error\n");
+#endif
+        thread_job_queue_destroy(_pool->job_queue);
+        free(_pool);
+        return NULL;
+    }
+    /* 设置线程分离属性 */
+    if (pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_DETACHED) != 0) {
+#ifdef THREAD_POOL_DEBUG
+        printf("set thread detach state attr error\n");
+#endif
+        thread_job_queue_destroy(_pool->job_queue);
+        free(_pool);
+        return NULL;
+    }
+    /* 设置线程栈属性 */
+    if (pthread_attr_setstacksize(&attr,16384 * 2) != 0) {
+#ifdef THREAD_POOL_DEBUG
+        printf("set thread stack size attr error\n");
+#endif
+        thread_job_queue_destroy(_pool->job_queue);
+        free(_pool);
+        return NULL;
+    }
+    for (i = 0; i < nums; i++) {
+        _pool->threads[i]->id = i;
+        if (thread_pool_add_thread(_pool,_pool->threads[i],&attr) !=0 ) {
+#ifdef THREAD_POOL_DEBUG
+            printf("thread pool add thread error\n");
+#endif
+            thread_job_queue_destroy(_pool->job_queue);
+            free(_pool);
+            return NULL;
+        }
+    }
+    while (_pool->thread_alive_nums != nums); /* 等待所有线程创建完毕 */
     return _pool;
 }
+
+
+static int
+thread_pool_add_thread(struct thread_pool *pool, thread *thread, pthread_attr_t const *attr)
+{
+    pool->thread_alive_nums++;
+    /* 创建线程 */
+    if (pthread_create(&thread->pthread,attr,thread_start,NULL) != 0) {
+#ifdef THREAD_POOL_DEBUG
+        printf("create thread %d error\n",thread->id);
+#endif
+        return -1;
+    }
+    return 0;
+}
+
 
 static int
 thread_job_queue_init(thread_job_queue **job_queue)
@@ -89,7 +149,6 @@ thread_job_queue_push(thread_job_queue *job_queue,thread_job *job)
     return 0;
 }
 
-
 static thread_job *
 thread_job_pull(thread_job_queue *job_queue)
 {
@@ -129,7 +188,7 @@ thread_job_queue_clear(thread_job_queue *job_queue)
 }
 
 static void
-thread_job_destroy(thread_job_queue *job_queue)
+thread_job_queue_destroy(thread_job_queue *job_queue)
 {
     thread_job_queue_clear(job_queue);
 }
