@@ -65,7 +65,7 @@ thread_job_queue_init(thread_job_queue **job_queue)
     return 0;
 }
 
-int
+static int
 thread_job_queue_push(thread_job_queue *job_queue,thread_job *job)
 {
     pthread_mutex_lock(&job_queue->job_mutex);
@@ -90,9 +90,10 @@ thread_job_queue_push(thread_job_queue *job_queue,thread_job *job)
 }
 
 
-thread_job * 
+static thread_job *
 thread_job_pull(thread_job_queue *job_queue)
 {
+    pthread_mutex_lock(&job_queue->job_mutex);
     thread_job *job = job_queue->front;
     if (job == NULL) {
 #ifdef THREAD_POOL_DEBUG
@@ -112,5 +113,23 @@ thread_job_pull(thread_job_queue *job_queue)
             job_queue->front->next = job_queue->front;
             job_queue->len--;
     }
+    pthread_mutex_unlock(&job_queue->job_mutex);
     return job;
+}
+
+static void
+thread_job_queue_clear(thread_job_queue *job_queue)
+{
+    while(job_queue->len) {
+        free(thread_job_pull(job_queue));
+    }
+    job_queue->len = 0;
+    job_queue->front = NULL;
+    job_queue->rear = NULL;
+}
+
+static void
+thread_job_destroy(thread_job_queue *job_queue)
+{
+    thread_job_queue_clear(job_queue);
 }

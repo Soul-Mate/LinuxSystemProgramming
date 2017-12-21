@@ -51,6 +51,6 @@ thread_pool * thread_pool_init(int);
 static int thread_job_queue_init(thread_job_queue **);
 int thread_job_push(thread_job_queue *, thread_job *);
 thread_job * thread_job_pull(thread_job_queue *);
-static void thread_job_clear(thread_job_queue *);
+static void thread_job_queue_clear(thread_job_queue *);
 static void thread_job_destroy(thread_job_queue *);
 #endif //LINUX_SYSTEM_PROGRAMMING_THPOOL_H
