@@ -21,11 +21,11 @@ void
 increment(int loop)
 {
     int i = 0;
+    pthread_rwlock_wrlock(&rwlock);
     for (i = 0; i < loop; i++) {
-        pthread_rwlock_wrlock(&rwlock);
         global++;
-        pthread_rwlock_unlock(&rwlock);
     }
+    pthread_rwlock_unlock(&rwlock);
     sleep(1);
 }
 

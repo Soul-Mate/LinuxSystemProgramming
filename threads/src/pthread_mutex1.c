@@ -14,11 +14,11 @@ pthread_mutex_t mutex;
 void
 increment(int loop) {
     int i = 0;
+    pthread_mutex_lock(&mutex);
     for (i = 0; i < loop; i++) {
-        pthread_mutex_lock(&mutex);
         global++;
-        pthread_mutex_unlock(&mutex);
     }
+    pthread_mutex_unlock(&mutex);
 }
 
 void *
