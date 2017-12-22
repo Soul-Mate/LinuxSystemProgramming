@@ -45,6 +45,7 @@ typedef struct thread_job_queue {
 typedef struct thread {
     int id;
     pthread_t pthread;
+    struct thread_pool *pool;
 } thread;
 
 /* 线程池结构 */
@@ -57,10 +58,13 @@ typedef struct thread_pool {
     pthread_cond_t pool_cond;           /* 线程池信号了 */
 } thread_pool;
 
- thread_pool * thread_pool_init(int);
- int thread_pool_add_work(thread_pool *, void*(*func)(void *),void*);
- int thread_pool_wait(thread_pool *);
-static int thread_init(thread_pool *, thread **, const pthread_attr_t *,int);
+thread_pool * thread_pool_init(int);
+int thread_pool_add_work(thread_pool *, void*(*func)(void *),void*);
+int thread_pool_wait(thread_pool *);
+
+int get_thread_pool_work(thread_pool *);
+
+int thread_init(thread_pool *, thread **, const pthread_attr_t *,int);
 void *thread_start(void *);
 
 static int thread_job_queue_init(thread_job_queue **);

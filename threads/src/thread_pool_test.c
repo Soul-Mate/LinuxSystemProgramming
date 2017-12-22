@@ -18,7 +18,7 @@ main(int argc, const char *argv[])
 {
     int i;
     thread_pool *pool = thread_pool_init(4);
-    for(i = 0; i < 10; i++) {
+    for(i = 0; i < 1000000; i++) {
         thread_pool_add_work(pool,start_routine,NULL);
     }
     thread_pool_wait(pool);

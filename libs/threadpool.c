@@ -39,9 +39,7 @@ thread_pool_init(int nums)
         free(_pool);
         return NULL;
     }
-#ifdef THREAD_POOL_DEBUG
     printf("Debug Success: thread pool make success\n");
-#endif
     /* 初始化任务队列 */
     if (thread_job_queue_init(&_pool->job_queue) != 0) {
 #ifdef THREAD_POOL_DEBUG
@@ -70,7 +68,7 @@ thread_pool_init(int nums)
         return NULL;
     }
     /* 设置线程栈属性 */
-    if (pthread_attr_setstacksize(&attr,16384 * 2) != 0) {
+    if (pthread_attr_setstacksize(&attr,16384) != 0) {
 #ifdef THREAD_POOL_DEBUG
         printf("set thread stack size attr error\n");
 #endif
@@ -88,6 +86,7 @@ thread_pool_init(int nums)
             free(_pool);
             return NULL;
         }
+        printf("Create %d success\n",i);
     }
     while (_pool->thread_alive_nums != nums); /* 等待所有线程创建完毕 */
     return _pool;
@@ -96,10 +95,10 @@ thread_pool_init(int nums)
  int
 thread_pool_add_work(thread_pool *pool, void*(*func)(void *), void *arg)
 {
+    printf("%d\n",1111);
     thread_job *job = (thread_job *)malloc(sizeof(thread_job));
     job->arg = arg;
     job->func = func;
-    job->next = NULL;
     thread_job_queue_push(pool->job_queue,job);
     return 0;
 }
@@ -122,48 +121,51 @@ thread_pool_wait(thread_pool *pool)
  * @param const pthread_attr_t * attr
  * @return
  */
-static int
+int
 thread_init(struct thread_pool *pool, thread **thread, const pthread_attr_t *attr, int i)
 {
     (*thread) = (struct thread *)malloc(sizeof(struct thread));
-    if (*thread == NULL) {
+    if ((*thread) == NULL) {
         return -1;
     }
     (*thread)->id = i;
+    (*thread)->pool = pool;
     /* 创建线程 */
-    if (pthread_create(&(*thread)->pthread,attr,thread_start,(void *)pool) != 0) {
-#ifdef THREAD_POOL_DEBUG
-        printf("Debug Error: create thread %d error\n",i);
-#endif
-        return -1;
-    }
+    pthread_create(&(*thread)->pthread,attr,(void *)thread_start,(void *)(*thread));
     return 0;
 }
 
 void *
 thread_start(void *arg)
 {
-    thread_pool *pool = (thread_pool *)arg;
+    thread *t = (thread *)arg;
+    thread_pool *pool = t->pool;
     pthread_mutex_lock(&pool->pool_mutex);
-    pool->thread_alive_nums++;
+    pool->thread_alive_nums+=1;
     pthread_mutex_unlock(&pool->pool_mutex);
     while(threads_keep_alive) {
+        job_flag_wait(pool->job_queue->has_job);
+
         if (threads_keep_alive) {
+
             pthread_mutex_lock(&pool->pool_mutex);
             pool->thread_working_nums++;
             pthread_mutex_unlock(&pool->pool_mutex);
             /* 阻塞等待任务发生 */
-            job_flag_wait(pool->job_queue->has_job);
+            void* (*func_buff)(void*);
+            void*  arg_buff;
             thread_job * job = thread_job_queue_pull(pool->job_queue);
             if (job) {
                 /* 运行任务 */
-                job->func(job->arg);
+                func_buff = job->func;
+                arg_buff  = job->arg;
+                func_buff(arg_buff);
                 free(job);
             }
             pthread_mutex_lock(&pool->pool_mutex);
             pool->thread_working_nums--;
             /* 线程池任务运行结束 */
-            if (pool->thread_working_nums == 0) {
+            if (!pool->thread_working_nums) {
                 pthread_cond_signal(&pool->pool_cond);
             }
             pthread_mutex_unlock(&pool->pool_mutex);
@@ -223,9 +225,9 @@ thread_job_queue_push(thread_job_queue *job_queue,thread_job *job)
             job_queue->rear = job;
     }
     job_queue->len++;
-    pthread_mutex_unlock(&job_queue->job_mutex);
     /* 通知线程作业 */
     job_flag_signal(job_queue->has_job);
+    pthread_mutex_unlock(&job_queue->job_mutex);
     return 0;
 }
 
@@ -296,35 +298,24 @@ job_flag_init(job_flag **flag)
     return 0;
 }
 static int
-job_flag_wait(job_flag *flag)
+job_flag_wait(job_flag *f)
 {
-    pthread_mutex_lock(&flag->mutex);
-    while(flag->flag == 0) {
-        if (pthread_cond_wait(&flag->cond,&flag->mutex) != 0) {
-#ifdef THREAD_POOL_DEBUG
-            printf("Error: job flag wait cond error\n");
-#endif
-            return -1;
-        }
+    pthread_mutex_lock(&f->mutex);
+    while(f->flag != 1) {
+        pthread_cond_wait(&f->cond,&f->mutex);
     }
-    flag->flag = 0;
-    pthread_mutex_unlock(&flag->mutex);
+    f->flag = 0;
+    pthread_mutex_unlock(&f->mutex);
     return 0;
 }
 
 static int
-job_flag_signal(job_flag *flag)
+job_flag_signal(job_flag *f)
 {
-    if (pthread_mutex_lock(&flag->mutex) != 0) {
-        return -1;
-    }
-    flag->flag = 1;
-    if (pthread_cond_signal(&flag->cond) != 0) {
-        return -1;
-    }
-    if (pthread_mutex_unlock(&flag->mutex) != 0) {
-        return -1;
-    }
+    pthread_mutex_lock(&f->mutex);
+    f->flag = 1;
+    pthread_cond_signal(&f->cond);
+    pthread_mutex_unlock(&f->mutex);
     return 0;
 }
 
