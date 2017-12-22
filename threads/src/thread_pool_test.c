@@ -3,6 +3,8 @@
  * 2017/12/21 10:26
  * 线程池测试代码
  */
+#include <stdio.h>
+#include <pthread.h>
 #include "threadpool.h"
 
 void *
@@ -14,19 +16,11 @@ start_routine(void *arg) {
 int
 main(int argc, const char *argv[])
 {
-    thread_job *job = (thread_job *)malloc(sizeof(thread_job));
-    job->next = NULL;
-    job->arg = NULL;
-    job->func = start_routine;
-    thread_pool * pool = thread_pool_init(4);
-    thread_job_queue_push(pool->job_queue,job);
-    thread_job_queue_push(pool->job_queue,job);
-    thread_job_queue_push(pool->job_queue,job);
-    thread_job_queue_push(pool->job_queue,job);
-    thread_job_queue_push(pool->job_queue,job);
-    thread_job_queue_push(pool->job_queue,job);
-    while (pool->job_queue->len) {
-        thread_job *test_job = thread_job_pull(pool->job_queue);
-        test_job->func(test_job->arg);
+    int i;
+    thread_pool *pool = thread_pool_init(4);
+    for(i = 0; i < 10; i++) {
+        thread_pool_add_work(pool,start_routine,NULL);
     }
+    thread_pool_wait(pool);
+    return 0;
 }
