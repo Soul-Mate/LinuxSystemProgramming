@@ -2,187 +2,74 @@
  * (C) XuYuanChang 2017
  * 2017/12/21 10:16
  */
-#define THREAD_POOL_DEBUG
-
 #include "threadpool.h"
 
-volatile int threads_keep_alive = 0;
+volatile int thread_keep_alive = 0;
 
 /**
- * 初始化线程池
- * @param int nums
- * @return thread_pool *
+ * initialize job flag.
+ * when flag equal zero, all threads  wait.
+ * on success,returned zero. other,returned -1.
+ * @param j
+ * @return int
  */
- thread_pool *
-thread_pool_init(int nums)
+int flag_init(struct job_flag **j)
 {
-    int i;
-    pthread_attr_t attr;
-    threads_keep_alive = 1;
-
-    /* 初始化线程池 */
-    thread_pool *_pool = (thread_pool *)malloc(sizeof(thread_pool));
-    if (_pool == NULL) {
-#ifdef THREAD_POOL_DEBUG
-        printf("Debug Error: thread pool make error\n");
-#endif
-        free(_pool);
-        return NULL;
-    }
-    _pool->thread_alive_nums = 0;
-    _pool->thread_working_nums = 0;
-    _pool->threads = (thread **)malloc(sizeof(thread*) * nums);
-    if (_pool->threads == NULL) {
-#ifdef THREAD_POOL_DEBUG
-        printf("Debug Error: thread pool make threads error\n");
-#endif
-        free(_pool);
-        return NULL;
-    }
-    printf("Debug Success: thread pool make success\n");
-    /* 初始化任务队列 */
-    if (thread_job_queue_init(&_pool->job_queue) != 0) {
-#ifdef THREAD_POOL_DEBUG
-        printf("Debug Error: thread job queue make error\n");
-#endif
-        thread_job_queue_destroy(_pool->job_queue);
-        free(_pool);
-        return NULL;
-    }
-    /* 初始化线程属性 */
-    if (pthread_attr_init(&attr) != 0) {
-#ifdef THREAD_POOL_DEBUG
-        printf("Debug Error: thread init attr error\n");
-#endif
-        thread_job_queue_destroy(_pool->job_queue);
-        free(_pool);
-        return NULL;
-    }
-    /* 设置线程分离属性 */
-    if (pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_DETACHED) != 0) {
-#ifdef THREAD_POOL_DEBUG
-        printf("set thread detach state attr error\n");
-#endif
-        thread_job_queue_destroy(_pool->job_queue);
-        free(_pool);
-        return NULL;
-    }
-    /* 设置线程栈属性 */
-    if (pthread_attr_setstacksize(&attr,16384) != 0) {
-#ifdef THREAD_POOL_DEBUG
-        printf("set thread stack size attr error\n");
-#endif
-        thread_job_queue_destroy(_pool->job_queue);
-        free(_pool);
-        return NULL;
-    }
-    /* 添加线程到线程池 */
-    for (i = 0; i < nums; i++) {
-        if (thread_init(_pool,&_pool->threads[i],&attr,i) != 0) {
-#ifdef THREAD_POOL_DEBUG
-            printf("thread pool add thread error\n");
-#endif
-            thread_job_queue_destroy(_pool->job_queue);
-            free(_pool);
-            return NULL;
-        }
-        printf("Create %d success\n",i);
-    }
-    while (_pool->thread_alive_nums != nums); /* 等待所有线程创建完毕 */
-    return _pool;
-}
-
- int
-thread_pool_add_work(thread_pool *pool, void*(*func)(void *), void *arg)
-{
-    printf("%d\n",1111);
-    thread_job *job = (thread_job *)malloc(sizeof(thread_job));
-    job->arg = arg;
-    job->func = func;
-    thread_job_queue_push(pool->job_queue,job);
-    return 0;
-}
-
- int
-thread_pool_wait(thread_pool *pool)
-{
-    pthread_mutex_lock(&pool->pool_mutex);
-    while(pool->thread_working_nums || pool->job_queue->len) {
-        pthread_cond_wait(&pool->pool_cond,&pool->pool_mutex);
-    }
-    pthread_mutex_unlock(&pool->pool_mutex);
-}
-
-
-/**
- * 初始化线程
- * @param thread_pool * pool
- * @param thread * thread
- * @param const pthread_attr_t * attr
- * @return
- */
-int
-thread_init(struct thread_pool *pool, thread **thread, const pthread_attr_t *attr, int i)
-{
-    (*thread) = (struct thread *)malloc(sizeof(struct thread));
-    if ((*thread) == NULL) {
+    (*j) = (struct job_flag *)malloc(sizeof(struct job_flag));
+    if ((*j) == NULL) {
         return -1;
     }
-    (*thread)->id = i;
-    (*thread)->pool = pool;
-    /* 创建线程 */
-    pthread_create(&(*thread)->pthread,attr,(void *)thread_start,(void *)(*thread));
+    (*j)->flag = 0;
+    if (pthread_mutex_init(&(*j)->mutex,NULL) != 0) {
+        return -1;
+    }
+    if (pthread_cond_init(&(*j)->cond,NULL) != 0) {
+        return -1;
+    }
     return 0;
 }
 
-void *
-thread_start(void *arg)
+/**
+ * wait job flag equal 1.
+ * here, when job flag equal, all threads will rob task
+ *
+ * @param job_flag * j
+ */
+void flag_wait(struct job_flag *j)
 {
-    thread *t = (thread *)arg;
-    thread_pool *pool = t->pool;
-    pthread_mutex_lock(&pool->pool_mutex);
-    pool->thread_alive_nums+=1;
-    pthread_mutex_unlock(&pool->pool_mutex);
-    while(threads_keep_alive) {
-        job_flag_wait(pool->job_queue->has_job);
-
-        if (threads_keep_alive) {
-
-            pthread_mutex_lock(&pool->pool_mutex);
-            pool->thread_working_nums++;
-            pthread_mutex_unlock(&pool->pool_mutex);
-            /* 阻塞等待任务发生 */
-            void* (*func_buff)(void*);
-            void*  arg_buff;
-            thread_job * job = thread_job_queue_pull(pool->job_queue);
-            if (job) {
-                /* 运行任务 */
-                func_buff = job->func;
-                arg_buff  = job->arg;
-                func_buff(arg_buff);
-                free(job);
-            }
-            pthread_mutex_lock(&pool->pool_mutex);
-            pool->thread_working_nums--;
-            /* 线程池任务运行结束 */
-            if (!pool->thread_working_nums) {
-                pthread_cond_signal(&pool->pool_cond);
-            }
-            pthread_mutex_unlock(&pool->pool_mutex);
-        }
-    }
-    return NULL;
+    pthread_mutex_lock(&j->mutex);
+    pthread_cond_signal(&j->cond);
+    j->flag = 0;
+    pthread_mutex_unlock(&j->mutex);
 }
 
+/**
+ * notify all block threads
+ *
+ * @param job_flag j
+ * @return int
+ */
+int flag_broadcast(struct job_flag *j)
+{
+    j->flag = 1;
+    if (pthread_cond_broadcast(&j->cond) != 0) {
+        return -1;
+    }
+    return 0;
+}
 
-static int
-thread_job_queue_init(thread_job_queue **job_queue)
+int flag_signal(struct job_flag *j)
+{
+    j->flag = 1;
+    if (pthread_cond_signal(&j->cond) != 0) {
+        return -1;
+    }
+}
+
+int job_queue_init(thread_job_queue **job_queue)
 {
     (*job_queue) = (struct thread_job_queue *)malloc(sizeof(struct thread_job_queue));
     if ((*job_queue) == NULL) {
-#ifdef THREAD_POOL_DEBUG
-        printf("Debug Error: job queue malloc error\n");
-#endif
         return -1;
     }
     (*job_queue)->len = 0;
@@ -190,156 +77,247 @@ thread_job_queue_init(thread_job_queue **job_queue)
     (*job_queue)->rear = NULL;
     /* 初始化互斥量 */
     if (pthread_mutex_init(&(*job_queue)->job_mutex,NULL) != 0) {
-#ifdef THREAD_POOL_DEBUG
-        printf("Debug Error: job queue pthread_mutex_init error\n");
-#endif
         return -1;
     }
     /* 初始化任务标志 */
-    if (job_flag_init(&(*job_queue)->has_job) != 0) {
-#ifdef THREAD_POOL_DEBUG
-        printf("Debug Error: job queue init job flag error\n");
-#endif
+    if (flag_init(&(*job_queue)->has_job) != 0) {
         return -1;
     }
     return 0;
 }
 
-static int
-thread_job_queue_push(thread_job_queue *job_queue,thread_job *job)
+int job_queue_push(struct thread_job_queue *job_queue,struct thread_job *job)
 {
-    if (job == NULL) {
-#ifdef THREAD_POOL_DEBUG
-        printf("job not found\n");
-#endif
-        return -1;
-    }
     pthread_mutex_lock(&job_queue->job_mutex);
     switch (job_queue->len) {
-    case 0: /* 队列为空 */
+        case 0: /* 队列为空 */
             job_queue->front = job;
             job_queue->rear = job;
             break;
-    default: /* 队列不为空 */
-            job_queue->rear->next = job->next;
+        default: /* 队列不为空 */
+            job_queue->rear->next = job;
             job_queue->rear = job;
     }
     job_queue->len++;
     /* 通知线程作业 */
-    job_flag_signal(job_queue->has_job);
+    flag_signal(job_queue->has_job);
     pthread_mutex_unlock(&job_queue->job_mutex);
     return 0;
 }
 
-static thread_job *
-thread_job_queue_pull(thread_job_queue *job_queue)
+thread_job *job_queue_pull(thread_job_queue *job_queue)
 {
     pthread_mutex_lock(&job_queue->job_mutex);
-    thread_job *job = job_queue->front;
-    if (job == NULL) {
-#ifdef THREAD_POOL_DEBUG
-        printf("job not found\n");
-#endif
-        return NULL;
-    }
+    thread_job *job;;
     switch (job_queue->len) {
-    case 0: /* 队列为空 */
+        case 0: /* 队列为空 */
+            job = NULL;
             break;
-    case 1: /* 队列只存在一个元素 */
+        case 1: /* 队列只存在一个元素 */
+            job = job_queue->front;
             job_queue->front = NULL;
             job_queue->rear = NULL;
             job_queue->len = 0;
             break;
-    default: /* 队列元素大于1 */
-            job_queue->front->next = job_queue->front;
+        default: /* 队列元素大于1 */
+            job = job_queue->front;
+            job_queue->front = job->next;
             job_queue->len--;
     }
+    flag_signal(job_queue->has_job);
     pthread_mutex_unlock(&job_queue->job_mutex);
     return job;
 }
 
-static void
-thread_job_queue_clear(thread_job_queue *job_queue)
+void job_queue_clear(thread_job_queue *job_queue)
 {
     while(job_queue->len) {
-        free(thread_job_queue_pull(job_queue));
+        free(job_queue_pull(job_queue));
     }
     job_queue->len = 0;
     job_queue->front = NULL;
     job_queue->rear = NULL;
 }
 
-static void
-thread_job_queue_destroy(thread_job_queue *job_queue)
+void job_queue_destroy(thread_job_queue *job_queue)
 {
-    thread_job_queue_clear(job_queue);
+    job_queue_clear(job_queue);
 }
 
-static int
-job_flag_init(job_flag **flag)
+/**
+ * initialize thread
+ *
+ * @param thread_pool * pool
+ * @param thread ** t
+ * @param const pthread_attr_t * attr
+ * @param int i
+ * @return
+ */
+int thread_init(struct thread_pool *pool, struct thread **t, const pthread_attr_t *attr, int i)
 {
-    (*flag) = (struct job_flag *)malloc(sizeof(struct job_flag));
-    if ((*flag) == NULL) {
+    (*t)  = (struct thread *)malloc(sizeof(struct thread));
+    if ((*t) == NULL) {
         return -1;
     }
-    (*flag)->flag = 0;
-    if (pthread_mutex_init(&(*flag)->mutex,NULL) != 0) {
-#ifdef THREAD_POOL_DEBUG
-        printf("Debug Error: job flag init mutex error\n");
-#endif
-        return -1;
-    }
-    if (pthread_cond_init(&(*flag)->cond,NULL) != 0) {
-#ifdef THREAD_POOL_DEBUG
-        printf("Debug Error: job flag init cond error\n");
-#endif
-        return -1;
-    }
-    return 0;
-}
-static int
-job_flag_wait(job_flag *f)
-{
-    pthread_mutex_lock(&f->mutex);
-    while(f->flag != 1) {
-        pthread_cond_wait(&f->cond,&f->mutex);
-    }
-    f->flag = 0;
-    pthread_mutex_unlock(&f->mutex);
-    return 0;
-}
-
-static int
-job_flag_signal(job_flag *f)
-{
-    pthread_mutex_lock(&f->mutex);
-    f->flag = 1;
-    pthread_cond_signal(&f->cond);
-    pthread_mutex_unlock(&f->mutex);
-    return 0;
-}
-
-static int
-job_flag_broadcast(job_flag * flag)
-{
-    if (pthread_mutex_lock(&flag->mutex) != 0) {
-        return -1;
-    }
-    flag->flag = 1;
-    if (pthread_cond_broadcast(&flag->cond) != 0) {
-        return -1;
-    }
-    if (pthread_mutex_unlock(&flag->mutex) != 0) {
+    (*t)->id = i;
+    if (pthread_create(&(*t)->pthread,attr,thread_start,(void *)pool) != 0) {
         return -1;
     }
     return 0;
 }
 
-static int
-job_flag_reset(job_flag *flag)
+/**
+ * function is runs after the thread is created
+ *
+ * @param void * arg
+ * @return void *
+ */
+void *thread_start(void *arg)
 {
-    if (job_flag_init(flag) != 0) {
+    thread_pool *pool = (struct thread_pool *)arg;
+    pthread_mutex_lock(&pool->pool_mutex);
+    pool->thread_alive_nums++;
+    pthread_mutex_unlock(&pool->pool_mutex);
+
+    while(thread_keep_alive) {
+
+        if (thread_keep_alive) {
+            flag_wait(pool->job_queue->has_job);
+
+            pthread_mutex_lock(&pool->pool_mutex);
+            pool->thread_working_nums++;
+            pthread_mutex_unlock(&pool->pool_mutex);
+
+            thread_job *job = job_queue_pull(pool->job_queue);
+
+            if (job) {
+                job->func(job->arg);
+                free(job);
+            }
+
+            pthread_mutex_lock(&pool->pool_mutex);
+            pool->thread_working_nums--;
+            if (!pool->thread_working_nums) {
+                pthread_cond_signal(&pool->pool_cond);
+            }
+            pthread_mutex_unlock(&pool->pool_mutex);
+        }
+    }
+
+    pthread_mutex_lock(&pool->pool_mutex);
+    pool->thread_alive_nums--;
+    pthread_mutex_unlock(&pool->pool_mutex);
+    return NULL;
+}
+
+/**
+ * initialize thread pool
+ *
+ * @param int nums
+ * @return thread_pool *
+ */
+thread_pool *thread_pool_init(int nums)
+{
+    int i;
+    pthread_attr_t attr;
+    thread_keep_alive = 1;
+
+    /* make a new thread pool */
+    thread_pool *_pool = (thread_pool *)malloc(sizeof(thread_pool));
+    if (_pool == NULL) {
+        free(_pool);
+        return NULL;
+    }
+
+    _pool->thread_alive_nums = 0;   /* alive threads */
+    _pool->thread_working_nums = 0; /* working threads */
+
+
+    /* make threads in threads pool */
+    _pool->threads = (thread **)malloc(sizeof(thread*) * nums);
+    if (_pool->threads == NULL) {
+        free(_pool);
+        return NULL;
+    }
+
+    /* initialize thread pool mutex */
+    if (pthread_mutex_init(&_pool->pool_mutex,NULL) != 0) {
+        free(_pool);
+        return NULL;
+    }
+
+    /* initialize thread pool condition */
+    if (pthread_cond_init(&_pool->pool_cond,NULL) != 0) {
+        free(_pool);
+        return NULL;
+    }
+
+    /* initialize thread attribute */
+    if (pthread_attr_init(&attr) != 0) {
+        free(_pool);
+        return NULL;
+    }
+    /* set thread detach state attribute */
+    if (pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_DETACHED) != 0) {
+        free(_pool);
+        return NULL;
+    }
+    /* set thread stack size equal PTHREAD_STACK_MIN(16384) * 2 */
+    if (pthread_attr_setstacksize(&attr,PTHREAD_STACK_MIN * 2) != 0) {
+        free(_pool);
+        return NULL;
+    }
+
+    /* initialize job queue */
+    if (job_queue_init(&_pool->job_queue) != 0) {
+        job_queue_destroy(_pool->job_queue);
+        free(_pool);
+        return NULL;
+    }
+
+    /* create thread */
+    for (i = 0; i < nums; i++) {
+        if (thread_init(_pool,&_pool->threads[i],&attr,i) != 0) {
+            job_queue_destroy(_pool->job_queue);
+            free(_pool);
+            return NULL;
+        }
+    }
+    while (_pool->thread_alive_nums != nums); /* wait all threads create success */
+    return _pool;
+}
+
+/**
+ * add work to thread pool
+ *
+ * @param  thread_pool * pool
+ * @param  void *(*func)(void *) func
+ * @param  void *arg
+ * @return int
+ */
+int thread_pool_add_work(struct thread_pool *pool, void*(*func)(void *), void *arg)
+{
+    thread_job *job = (struct thread_job *)malloc(sizeof(struct thread_job));
+    if (job == NULL) {
         return -1;
     }
+    job->arg = arg;
+    job->func = func;
+    job_queue_push(pool->job_queue,job);
     return 0;
+}
+
+/**
+ * wait thread pool completed
+ *
+ * @param thread_pool * pool
+ * @return
+ */
+int thread_pool_wait(thread_pool *pool)
+{
+    pthread_mutex_lock(&pool->pool_mutex);
+    while(pool->thread_working_nums || pool->job_queue->len) {
+        pthread_cond_wait(&pool->pool_cond,&pool->pool_mutex);
+    }
+    pthread_mutex_unlock(&pool->pool_mutex);
 }

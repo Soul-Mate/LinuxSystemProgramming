@@ -4,13 +4,11 @@
  * 线程池头文件
  */
 
-#ifndef LINUX_SYSTEM_PROGRAMMING_THPOOL_H
-#define LINUX_SYSTEM_PROGRAMMING_THPOOL_H
+#ifndef LINUX_SYSTEM_PROGRAMMING_THREAD_POOL_H
+#define LINUX_SYSTEM_PROGRAMMING_THREAD_POOL_H
 
-#ifdef THREAD_POOL_DEBUG
-#define THREAD_POOL_DEBUG 1
-#else
-#define THREAD_POOL_DEBUG 0
+#ifndef PTHREAD_STACK_MIN
+#define PTHREAD_STACK_MIN 16384
 #endif
 
 
@@ -45,7 +43,6 @@ typedef struct thread_job_queue {
 typedef struct thread {
     int id;
     pthread_t pthread;
-    struct thread_pool *pool;
 } thread;
 
 /* 线程池结构 */
@@ -55,27 +52,24 @@ typedef struct thread_pool {
     volatile int thread_alive_nums;     /* 存活线程 */
     volatile int thread_working_nums;   /* 工作线程 */
     pthread_mutex_t pool_mutex;         /* 线程池互斥锁 */
-    pthread_cond_t pool_cond;           /* 线程池信号了 */
+    pthread_cond_t pool_cond;           /* 线程池信号量 */
 } thread_pool;
 
-thread_pool * thread_pool_init(int);
-int thread_pool_add_work(thread_pool *, void*(*func)(void *),void*);
-int thread_pool_wait(thread_pool *);
-
-int get_thread_pool_work(thread_pool *);
+int flag_init(struct job_flag **);
+void flag_wait(struct job_flag *);
+int flag_broadcast(struct job_flag *);
+int flag_signal(struct job_flag *);
 
 int thread_init(thread_pool *, thread **, const pthread_attr_t *,int);
 void *thread_start(void *);
 
-static int thread_job_queue_init(thread_job_queue **);
-static int thread_job_queue_push(thread_job_queue *, thread_job *);
-static thread_job * thread_job_queue_pull(thread_job_queue *);
-static void thread_job_queue_clear(thread_job_queue *);
-static void thread_job_queue_destroy(thread_job_queue *);
+thread_pool * thread_pool_init(int);
+int thread_pool_add_work(struct thread_pool *, void*(*func)(void *),void*);
+int thread_pool_wait(thread_pool *);
 
-static int job_flag_init(job_flag **);
-static int job_flag_wait(job_flag *);
-static int job_flag_signal(job_flag *);
-static int job_flag_broadcast(job_flag *);
-static int job_flag_reset(job_flag *);
-#endif //LINUX_SYSTEM_PROGRAMMING_THPOOL_H
+int job_queue_init(thread_job_queue **);
+int job_queue_push(struct thread_job_queue *, struct thread_job *);
+thread_job * job_queue_pull(thread_job_queue *);
+void job_queue_clear(thread_job_queue *);
+void job_queue_destroy(thread_job_queue *);
+#endif //LINUX_SYSTEM_PROGRAMMING_THREAD_POOL_H
