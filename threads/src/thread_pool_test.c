@@ -35,6 +35,6 @@ main(int argc, const char *argv[])
         thread_pool_add_work(pool,start_routine2,NULL);
         thread_pool_add_work(pool,start_routine3,NULL);
     }
-    thread_pool_wait(pool);
+    thread_pool_destroy(pool);
     return 0;
 }

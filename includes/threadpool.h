@@ -66,6 +66,7 @@ void *thread_start(void *);
 thread_pool * thread_pool_init(int);
 int thread_pool_add_work(struct thread_pool *, void*(*func)(void *),void*);
 int thread_pool_wait(thread_pool *);
+void thread_pool_destroy(thread_pool *);
 
 int job_queue_init(thread_job_queue **);
 int job_queue_push(struct thread_job_queue *, struct thread_job *);

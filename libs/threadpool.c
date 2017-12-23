@@ -142,6 +142,7 @@ void job_queue_clear(thread_job_queue *job_queue)
 void job_queue_destroy(thread_job_queue *job_queue)
 {
     job_queue_clear(job_queue);
+    free(job_queue->has_job);
 }
 
 /**
@@ -320,4 +321,13 @@ int thread_pool_wait(thread_pool *pool)
         pthread_cond_wait(&pool->pool_cond,&pool->pool_mutex);
     }
     pthread_mutex_unlock(&pool->pool_mutex);
+}
+
+void thread_pool_destroy(thread_pool *pool)
+{
+    flag_broadcast(pool->job_queue->has_job);
+    while (pool->thread_working_nums || pool->job_queue->len);
+    job_queue_destroy(pool->job_queue);
+    free(pool);
+    thread_keep_alive = 0;
 }
