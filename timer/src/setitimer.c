@@ -15,19 +15,19 @@ struct timeval {
     suseconds_t tv_usec;  微妙
 }
 
-old_value 是上一个定时器的传出值
+参数witch可选类型
+  ITIMER_REAL
+    创建以真实时间倒计时的定时器。到期时会产生SIGALRM信号
+  ITIMER_VIRTUAL
+    创建虚拟进程时间(用户模式下CPU时间)倒计时的定时器。到期时会产生SIGVTALRM信号。
+  ITIMER_PROF
+    创建一个profiling进程，以进程时间(用户态和内核态CPU时间总和)倒计时,
+  到期时产生SIGPROF信号
 
-定时器是根据it_value递减为0之后发送信号,之后再根据it_interval重新定时,new_value 中的
+定时器是根据it_value递减为0之后发送信号,之后再根据it_interval重新计时,new_value 中的
 it_value的值不能为 0 为0定时器不启动.
 
-witch可选类型
-ITIMER_REAL
-  创建以真实时间倒计时的定时器。到期时会产生SIGALRM信号
-ITIMER_VIRTUAL
-  创建虚拟进程时间(用户模式下CPU时间)倒计时的定时器。到期时会产生SIGVTALRM信号。
-ITIMER_PROF
-  创建一个profiling进程，以进程时间(用户态和内核态CPU时间总和)倒计时,
-到期时产生SIGPROF信号
+old_value 是上一个定时器的传出值
 */
 
 #include "main.h"
