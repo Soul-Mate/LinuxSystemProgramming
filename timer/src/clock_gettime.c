@@ -1,9 +1,10 @@
 /*
 #define _POSIX_C_SOURCE 199309
 #include <time.h>
+int clock_gettime(clockid_t clockid, struct timespec *tp);
+成功返回0 失败返回-1
 
-int clock
-
+获取当前时钟值
 */
 
 #define _POSIX_C_SOURCE 199309
